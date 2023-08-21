@@ -32,15 +32,3 @@ jobs:
         with:
           name: node-linux-release-aarch64
           path: ./dist_aarch64/
-
-  delete-artifacts:
-    name: Delete artifacts
-    runs-on: ubuntu-22.04
-    needs: [ deploy ]
-    if: ${{ always() }}
-    steps:
-      - name: Delete artifacts
-        uses: geekyeggo/delete-artifact@v2
-        with:
-          name: |
-            node-linux-release-aarch64
