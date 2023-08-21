@@ -1,15 +1,11 @@
-name: Build & deploy
+name: Build Test Aarch64
 on:
-  push:
-    tags:
-      - 'dev/*'
-      - 'rc/*'
-      - 'release/*'
+  push
 
 jobs:
-  build-windows-release:
-    name: Build windows release
-    runs-on: windows-2019
+  build-linux-aarch64-release:
+    name: Build aarch64 linux release
+    runs-on: ubuntu-22.04
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
@@ -20,230 +16,26 @@ jobs:
       - uses: actions/setup-python@v4
         with:
           python-version: '3.9'
-
-      - name: Install deps
-        run: choco install nasm
-
-      - name: Build
-        shell: cmd
-        run: |
-          cd alt-build && call alt-release.bat
-          cd ..
-          mkdir dist
-          copy out\Release\libnodev2.lib dist
-          copy out\Release\libnodev2.dll dist
-
-      - uses: actions/upload-artifact@v3
-        with:
-          name: node-windows-release
-          path: ./dist/
-
-  build-windows-debug:
-    name: Build windows debug
-    runs-on: windows-2019
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
-        with:
-          submodules: recursive
-          lfs: true
-
-      - uses: actions/setup-python@v4
-        with:
-          python-version: '3.9'
-
-      - name: Install deps
-        run: choco install nasm
-
-      - name: Build
-        shell: cmd
-        run: |
-          cd alt-build && call alt-debug.bat
-          cd ..
-          mkdir dist
-          copy out\Debug\libnodev2.lib dist
-          copy out\Debug\libnodev2.dll dist
-
-      - uses: actions/upload-artifact@v3
-        with:
-          name: node-windows-debug
-          path: ./dist/
-
-  build-linux-release:
-    name: Build linux release
-    runs-on: ubuntu-20.04
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
-        with:
-          submodules: recursive
-          lfs: true
-
-      - uses: actions/setup-python@v4
-        with:
-          python-version: '3.9'
-
-      - name: Build
-        run: |
-          cd alt-build && bash alt-release.sh
-          cd ..
-          mkdir dist
-          cp ./out/Release/libnodev2.so dist/libnodev2.so
 
       - name: Build aarch64
         run: |
           sudo apt-get install cmake build-essential binutils-aarch64-linux-gnu gcc-aarch64-linux-gnu g++-aarch64-linux-gnu python3 make python3-pip
-          ln -s /usr/aarch64-linux-gnu/lib/ld-linux-aarch64.so.1 /lib/ld-linux-aarch64.so.1
+          sudo ln -s /usr/aarch64-linux-gnu/lib/ld-linux-aarch64.so.1 /lib/ld-linux-aarch64.so.1
           chmod +rwx alt-build/alt-release-aarch64.sh
-          cd alt-build && bash alt-release-aarch64.sh
+          cd alt-build
+          ./alt-release-aarch64.sh
           cd ..
           mkdir dist_aarch64
           cp ./out/Release/libnodev2.so dist_aarch64/libnodev2.so
 
       - uses: actions/upload-artifact@v3
         with:
-          name: node-linux-release
-          path: ./dist/
-
-      - uses: actions/upload-artifact@v3
-        with:
           name: node-linux-release-aarch64
           path: ./dist_aarch64/
 
-  deploy:
-    name: Deploy
-    runs-on: ubuntu-20.04
-    needs:
-      - build-windows-release
-      - build-windows-debug
-      - build-linux-release
-    steps:
-      - name: Download windows release artifacts
-        uses: actions/download-artifact@v3
-        with:
-          name: node-windows-release
-          path: dist-windows-release
-
-      - name: Download windows debug artifacts
-        uses: actions/download-artifact@v3
-        with:
-          name: node-windows-debug
-          path: dist-windows-debug
-
-      - name: Download linux release artifacts
-        uses: actions/download-artifact@v3
-        with:
-          name: node-linux-release
-          path: dist-linux-release
-
-      - name: Download linux aarch64 release artifacts
-        uses: actions/download-artifact@v3
-        with:
-          name: node-linux-release-aarch64
-          path: dist-linux-release-aarch64
-
-      - name: Zip artifacts
-        run: |
-          zip -r -j node-windows-release dist-windows-release
-          zip -r -j node-windows-debug dist-windows-debug
-          zip -r -j node-linux-release dist-linux-release
-          zip -r -j node-linux-release-aarch64 dist-linux-release-aarch64
-
-      - name: Create Release
-        id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: ${{ github.ref }}
-          release_name: Release ${{ github.ref }}
-
-      - name: Upload windows release artifacts
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./node-windows-release.zip
-          asset_name: node-windows-release.zip
-          asset_content_type: application/zip
-
-      - name: Upload windows debug artifacts
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./node-windows-debug.zip
-          asset_name: node-windows-debug.zip
-          asset_content_type: application/zip
-
-      - name: Upload linux release artifacts
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./node-linux-release.zip
-          asset_name: node-linux-release.zip
-          asset_content_type: application/zip
-
-      - name: Upload linux aarch64 release artifacts
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./node-linux-release-aarch64.zip
-          asset_name: node-linux-release-aarch64.zip
-          asset_content_type: application/zip
-
-      - name: Extract version
-        id: version
-        shell: bash
-        run: |
-          TAG=${GITHUB_REF/refs\/tags\//}
-          echo ::set-output name=BRANCH::${TAG/\/*}
-          echo ::set-output name=VERSION::${TAG/*\/}
-
-      - name: Install CDN upload tool
-        run: npm i @altmp/upload-tool@latest
-
-      - name: Upload windows release files to CDN
-        run: npx alt-upload dist-windows-release deps/nodejs/v2/$BRANCH/x64_win32/Release $VERSION
-        env:
-          CI_UPLOAD_URL: ${{ secrets.CI_UPLOAD_URL }}
-          CI_DEPLOY_TOKEN: ${{ secrets.CI_DEPLOY_TOKEN }}
-          BRANCH: ${{ steps.version.outputs.BRANCH }}
-          VERSION: ${{ steps.version.outputs.VERSION }}
-
-      - name: Upload windows debug files to CDN
-        run: npx alt-upload dist-windows-debug deps/nodejs/v2/$BRANCH/x64_win32/Debug $VERSION
-        env:
-          CI_UPLOAD_URL: ${{ secrets.CI_UPLOAD_URL }}
-          CI_DEPLOY_TOKEN: ${{ secrets.CI_DEPLOY_TOKEN }}
-          BRANCH: ${{ steps.version.outputs.BRANCH }}
-          VERSION: ${{ steps.version.outputs.VERSION }}
-
-      - name: Upload linux files to CDN
-        run: npx alt-upload dist-linux-release deps/nodejs/v2/$BRANCH/x64_linux $VERSION
-        env:
-          CI_UPLOAD_URL: ${{ secrets.CI_UPLOAD_URL }}
-          CI_DEPLOY_TOKEN: ${{ secrets.CI_DEPLOY_TOKEN }}
-          BRANCH: ${{ steps.version.outputs.BRANCH }}
-          VERSION: ${{ steps.version.outputs.VERSION }}
-
-      - name: Upload linux aarch64 files to CDN
-        run: npx alt-upload dist-linux-release-aarch64 deps/nodejs/v2/$BRANCH/aarch64_linux $VERSION
-        env:
-          CI_UPLOAD_URL: ${{ secrets.CI_UPLOAD_URL }}
-          CI_DEPLOY_TOKEN: ${{ secrets.CI_DEPLOY_TOKEN }}
-          BRANCH: ${{ steps.version.outputs.BRANCH }}
-          VERSION: ${{ steps.version.outputs.VERSION }}
-
   delete-artifacts:
     name: Delete artifacts
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     needs: [ deploy ]
     if: ${{ always() }}
     steps:
@@ -251,7 +43,4 @@ jobs:
         uses: geekyeggo/delete-artifact@v2
         with:
           name: |
-            node-windows-release
-            node-windows-debug
-            node-linux-release
             node-linux-release-aarch64
